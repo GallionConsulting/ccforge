@@ -43,9 +43,10 @@ The installer copies forge's core files to `~/.forge/` and registers `/forge-cre
 ## Commands
 
 ```bash
-python install_forge.py             # Install or update
-python install_forge.py --check     # Verify installation health
-python install_forge.py --uninstall # Remove everything
+python install_forge.py                        # Install or update
+python install_forge.py --check                # Verify installation health
+python install_forge.py --uninstall            # Remove everything
+python install_forge.py --update-project PATH  # Update an existing project
 ```
 
 ## Requirements
@@ -79,6 +80,33 @@ python install_forge.py --uninstall # Remove everything
 - Core files are replaced cleanly (old dirs removed before copy)
 - Venv is skipped if a marker file matches the current requirements hash + Python version
 - Commands are overwritten in place
+
+## Updating Existing Projects
+
+When CCForge is updated (bug fixes, new tools, improved commands), existing projects don't get the changes automatically — they were scaffolded at creation time. Use `--update-project` to bring them up to date:
+
+```bash
+python install_forge.py --update-project /path/to/my-app
+```
+
+This replaces the following files from `~/.forge/` into the project:
+
+- `mcp_server/` — full directory replacement
+- `api/` — full directory replacement
+- `.claude/commands/` — the 11 project-local command files
+- `.claude/agents/` — coder.md, code-review.md, deep-dive.md
+- `.claude/skills/playwright-cli/` — full directory replacement
+
+**Not touched:** `.autoforge/features.db`, `.autoforge/prompts/`, `CLAUDE.md`, `.mcp.json`. Your feature database, specs, prompts, and project-specific config are preserved.
+
+The command writes `.autoforge/version.json` to track which version the project is on. If the project is already at the current version, it exits early.
+
+**Workflow:** Run the global installer first to update `~/.forge/`, then update each project:
+
+```bash
+python install_forge.py                          # Update global install
+python install_forge.py --update-project my-app  # Update project
+```
 
 ## Uninstall
 

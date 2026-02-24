@@ -615,6 +615,20 @@ features.db
 .agent.lock
 ```
 
+## 11. Write Version Metadata
+
+Write `$ARGUMENTS/.autoforge/version.json` with the following content:
+
+```json
+{
+  "ccforge_version": "{{CCFORGE_VERSION}}",
+  "created_at": "<current ISO 8601 timestamp>",
+  "updated_at": "<current ISO 8601 timestamp>"
+}
+```
+
+Replace `<current ISO 8601 timestamp>` with the actual current UTC timestamp in ISO 8601 format (e.g., `2026-02-24T12:00:00+00:00`).
+
 ---
 
 # AFTER FILE GENERATION: NEXT STEPS

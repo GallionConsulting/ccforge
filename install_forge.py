@@ -2,9 +2,10 @@
 """Forge Global Installer — Install forge commands globally for Claude Code.
 
 Usage:
-    python install_forge.py             # Install or update (idempotent)
-    python install_forge.py --uninstall # Remove ~/.forge/ and commands from ~/.claude/commands/
-    python install_forge.py --check     # Verify installation health
+    python install_forge.py                        # Install or update (idempotent)
+    python install_forge.py --check                # Verify installation health
+    python install_forge.py --uninstall            # Remove ~/.forge/ and commands from ~/.claude/commands/
+    python install_forge.py --update-project PATH  # Update an existing project to latest version
 """
 
 import argparse
@@ -15,6 +16,8 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+CCFORGE_VERSION = "1.0.0"
 
 FORGE_HOME = Path.home() / ".forge"
 CLAUDE_COMMANDS = Path.home() / ".claude" / "commands"
@@ -156,6 +159,9 @@ def adapt_forge_create() -> str:
     for old, new in replacements:
         content = content.replace(old, new)
 
+    # Inject version into the {{CCFORGE_VERSION}} placeholder
+    content = content.replace("{{CCFORGE_VERSION}}", CCFORGE_VERSION)
+
     return content
 
 
@@ -183,6 +189,7 @@ def copy_commands() -> None:
 
 def write_version() -> None:
     info = {
+        "ccforge_version": CCFORGE_VERSION,
         "installed_at": datetime.now(timezone.utc).isoformat(),
         "source_path": SOURCE_DIR.as_posix(),
         "python_version": sys.version,
@@ -321,9 +328,114 @@ def check() -> None:
     vf = FORGE_HOME / "version.json"
     if vf.exists():
         info = json.loads(vf.read_text())
-        print(f"\n  Installed: {info.get('installed_at', '?')}")
+        print(f"\n  Version:   {info.get('ccforge_version', '?')}")
+        print(f"  Installed: {info.get('installed_at', '?')}")
         print(f"  Source:    {info.get('source_path', '?')}")
         print(f"  Python:    {info.get('python_version', '?').split()[0]}")
+
+
+# ── Update existing project ────────────────────────────────────────────────────
+
+
+def update_project(project_path: str) -> None:
+    project = Path(project_path).resolve()
+
+    # 1. Verify global install exists
+    if not FORGE_HOME.exists():
+        print(f"Error: {FORGE_HOME} not found. Run 'python install_forge.py' first.")
+        sys.exit(1)
+
+    # 2. Verify this is a CCForge project
+    has_autoforge = (project / ".autoforge").is_dir()
+    has_mcp = (project / "mcp_server" / "feature_mcp.py").is_file()
+    if not has_autoforge and not has_mcp:
+        print(f"Error: {project} is not a CCForge project.")
+        print("  Expected .autoforge/ directory or mcp_server/feature_mcp.py")
+        sys.exit(1)
+
+    # 3. Check current version
+    version_file = project / ".autoforge" / "version.json"
+    current_version = None
+    original_created_at = None
+    if version_file.exists():
+        try:
+            existing_info = json.loads(version_file.read_text(encoding="utf-8"))
+            current_version = existing_info.get("ccforge_version")
+            original_created_at = existing_info.get("created_at")
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    if current_version:
+        if current_version == CCFORGE_VERSION:
+            print(f"Already up to date (v{CCFORGE_VERSION}).")
+            return
+        print(f"Updating: v{current_version} → v{CCFORGE_VERSION}\n")
+    else:
+        print(f"No version found (pre-versioning project), updating to v{CCFORGE_VERSION}...\n")
+
+    # 4. Copy files from ~/.forge/ into the project
+    updated: list[str] = []
+
+    # mcp_server/
+    dst = project / "mcp_server"
+    if dst.exists():
+        shutil.rmtree(dst)
+    shutil.copytree(FORGE_HOME / "mcp_server", dst, ignore=shutil.ignore_patterns("__pycache__"))
+    updated.append("mcp_server/")
+
+    # api/
+    dst = project / "api"
+    if dst.exists():
+        shutil.rmtree(dst)
+    shutil.copytree(FORGE_HOME / "api", dst, ignore=shutil.ignore_patterns("__pycache__"))
+    updated.append("api/")
+
+    # .claude/commands/ (project-local only)
+    commands_dst = project / ".claude" / "commands"
+    commands_dst.mkdir(parents=True, exist_ok=True)
+    commands_src = FORGE_HOME / "commands"
+    for cmd in PROJECT_LOCAL_COMMANDS:
+        src = commands_src / cmd
+        if src.exists():
+            shutil.copy2(src, commands_dst / cmd)
+    updated.append(f".claude/commands/ ({len(PROJECT_LOCAL_COMMANDS)} files)")
+
+    # .claude/agents/
+    agents_dst = project / ".claude" / "agents"
+    agents_dst.mkdir(parents=True, exist_ok=True)
+    agents_src = FORGE_HOME / "agents"
+    for agent_file in ["coder.md", "code-review.md", "deep-dive.md"]:
+        src = agents_src / agent_file
+        if src.exists():
+            shutil.copy2(src, agents_dst / agent_file)
+    updated.append(".claude/agents/ (3 files)")
+
+    # .claude/skills/playwright-cli/
+    skills_dst = project / ".claude" / "skills" / "playwright-cli"
+    if skills_dst.exists():
+        shutil.rmtree(skills_dst)
+    skills_src = FORGE_HOME / "skills" / "playwright-cli"
+    if skills_src.exists():
+        shutil.copytree(skills_src, skills_dst)
+        updated.append(".claude/skills/playwright-cli/")
+
+    # 5. Write/update .autoforge/version.json
+    (project / ".autoforge").mkdir(parents=True, exist_ok=True)
+    now = datetime.now(timezone.utc).isoformat()
+    version_info = {
+        "ccforge_version": CCFORGE_VERSION,
+        "created_at": original_created_at or now,
+        "updated_at": now,
+    }
+    version_file.write_text(json.dumps(version_info, indent=2), encoding="utf-8")
+    updated.append(".autoforge/version.json")
+
+    # 6. Report
+    print("Updated:")
+    for item in updated:
+        print(f"  - {item}")
+    print(f"\nProject updated to v{CCFORGE_VERSION}.")
+    print("\nNot touched: .autoforge/features.db, .autoforge/prompts/, CLAUDE.md, .mcp.json")
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -333,6 +445,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Forge Global Installer")
     parser.add_argument("--uninstall", action="store_true", help="Remove installation")
     parser.add_argument("--check", action="store_true", help="Verify installation health")
+    parser.add_argument("--update-project", metavar="PATH", help="Update an existing CCForge project to the latest version")
     args = parser.parse_args()
 
     check_python_version()
@@ -341,6 +454,8 @@ def main() -> None:
         uninstall()
     elif args.check:
         check()
+    elif args.update_project:
+        update_project(args.update_project)
     else:
         install()
 

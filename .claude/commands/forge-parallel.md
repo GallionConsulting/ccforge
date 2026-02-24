@@ -5,19 +5,19 @@ description: Parallel build — spawn multiple coder agents (project)
 # ARGUMENTS
 
 Parse `$ARGUMENTS` for flags:
-- `--workers N` — Number of concurrent workers (1-4, default 3)
+- `--workers N` — Number of concurrent workers (1-4, default 4)
 - `--yolo` — Pass YOLO mode to workers (skip browser testing)
-- `--max-batches N` — Maximum number of batch cycles before stopping (default: 3)
+- `--max-batches N` — Maximum number of batch cycles before stopping (1-6, default: 4)
 - `--regression` — Reserve 1 worker slot for a regression testing agent each batch cycle
 
 The project is always the current working directory.
 
 Examples:
-- `/forge-parallel` — 3 workers
+- `/forge-parallel` — 4 workers
 - `/forge-parallel --workers 2` — 2 workers
-- `/forge-parallel --yolo --workers 4` — 4 workers, YOLO mode
+- `/forge-parallel --yolo` — 4 workers, YOLO mode
 - `/forge-parallel --max-batches 5` — stop after 5 batch cycles
-- `/forge-parallel --regression --workers 4` — 3 coding workers + 1 testing agent
+- `/forge-parallel --regression` — 3 coding workers + 1 testing agent
 - `/forge-parallel --yolo --workers 2 --max-batches 10` — combine flags
 
 ---
@@ -82,23 +82,92 @@ This ID prefixes all worker IDs to group them by session.
 
 # STARTUP — READ CONTEXT ONCE
 
-Before the main loop, read these files ONCE. Their content will be injected into every worker prompt, so the orchestrator pays the context cost once rather than per-worker.
+Before the main loop, read context files for the orchestrator's own orientation, then write a shared worker brief file that all workers will read from disk.
 
 ```bash
-# 1. Read the app spec (REQUIRED — injected into every worker)
-cat .autoforge/prompts/app_spec.txt
-
-# 2. Read progress notes for orientation (optional)
+# 1. Read progress notes for orchestrator orientation (optional)
 cat .autoforge/progress_notes.md 2>/dev/null || echo "No progress notes yet"
 
-# 3. Recent git history for context
+# 2. Recent git history for context
 git log --oneline -20
 
-# 4. List project structure
+# 3. List project structure
 ls -la
 ```
 
-Store the app spec content in a variable — you'll paste it into each worker prompt.
+**Do NOT read the app spec into the orchestrator context.** Workers will read it themselves from `.autoforge/prompts/app_spec.txt`.
+
+## Write the shared worker brief
+
+Write the file `.autoforge/worker_brief.md` containing all static worker instructions. This is written ONCE and read by every worker from disk, keeping the orchestrator's context clean.
+
+```markdown
+# Worker Brief — Parallel Build
+
+## Parallel Safety Rules
+IMPORTANT: Other agents are working on other features concurrently.
+- Work ONLY on your assigned feature. Do NOT modify code unrelated to it.
+- If you encounter unexpected file changes or merge conflicts, re-read the file before editing.
+- Commit immediately after verification passes.
+- Do NOT call feature_get_ready, feature_clear_all_in_progress, or any
+  tool that affects other features' status.
+- Do NOT call feature_create, feature_create_bulk, or any creation tools.
+
+## Git Commit Rules
+- ALWAYS use simple -m flag for commit messages
+- NEVER use heredocs (cat <<EOF) — they fail in sandbox mode
+- For multi-line messages, use multiple -m flags
+
+## Implementation Protocol
+
+1. Orient: Read project structure, recent git log (last 10 commits), and the app spec.
+   ```bash
+   ls -la {project_dir}
+   git log --oneline -10
+   cat .autoforge/prompts/app_spec.txt
+   ```
+
+2. Implement your assigned feature following the description and verification steps.
+   Build whatever is needed — missing pages, endpoints, components are YOUR job.
+
+3. Run lint/typecheck:
+   Check for package.json (npm run lint, npx tsc --noEmit) or
+   pyproject.toml (ruff check ., mypy .) and run the appropriate commands.
+   Fix any errors before proceeding.
+
+4. Start/verify dev server if needed (check if it's already running first).
+
+5. Verify (mode-dependent):
+
+   **STANDARD mode** — Verify with browser testing:
+   - Open browser to dev server URL using playwright-cli
+   - Execute each verification step from the feature
+   - Check for console errors with playwright-cli console
+   - Run mock data detection grep:
+     grep -rn "globalThis\|devStore\|dev-store\|mockDb\|mockData\|fakeData\|sampleData\|dummyData\|testData\|STUB\|MOCK\|isDevelopment\|isDev" src/ --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" --include="*.vue" --include="*.svelte" | grep -v "node_modules" | grep -v "__tests__" | grep -v ".test." | grep -v ".spec." || echo "No mock patterns found"
+   - For CRUD/data features: run server restart persistence test
+     (create test data, stop server, restart, verify data persists)
+   - Close browser with playwright-cli close when done
+
+   **YOLO mode** — Skip browser testing. Lint/typecheck passing is sufficient.
+
+6. If verification PASSES:
+   - Call feature_mark_passing with your feature_id
+   - Git commit:
+     git add -A
+     git commit -m "feat: implement {feature_name}" -m "Feature #{feature_id} verified and passing"
+   - Output your final message starting with: RESULT: PASS
+
+7. If verification FAILS after up to 3 fix attempts:
+   - Call feature_mark_failing with your feature_id and reason="{specific failure description}"
+   - Output your final message starting with: RESULT: FAIL: {what failed}
+
+## IMPORTANT
+Your FINAL message MUST start with "RESULT: PASS" or "RESULT: FAIL: {reason}".
+This is how the orchestrator knows your outcome. Do not forget this line.
+```
+
+**Note:** The `{project_dir}` in step 1 is the only variable in this file — substitute it with the actual project directory when writing.
 
 ---
 
@@ -120,8 +189,8 @@ Call feature_clear_stale with timeout_minutes=30
 SET batch_number = 0
 SET total_completed = 0
 SET total_failed = 0
-SET workers = (from --workers flag, default 3, clamped 1-4)
-SET max_batches = (from --max-batches flag, default 3)
+SET workers = (from --workers flag, default 4, clamped 1-4)
+SET max_batches = (from --max-batches flag, default 4, clamped 1-6)
 SET yolo = (true if --yolo flag present)
 SET regression = (true if --regression flag present)
 SET coding_workers = workers - 1 if regression else workers
@@ -293,13 +362,12 @@ Suggest next steps (always recommend `/clear` first):
 
 # WORKER PROMPT TEMPLATE
 
-Each background coder subagent receives this self-contained prompt. It includes everything the worker needs to implement a single feature independently.
+Each worker receives a **minimal prompt** with only feature-specific details. All static instructions and the app spec live on disk — workers read them, keeping the orchestrator's context lean.
 
 **Substitute these variables** when constructing the prompt:
 - `{project_dir}` — Current working directory (absolute path from `pwd`)
 - `{worker_id}` — This worker's agent ID (e.g., "orch-a1b2c3d4-w1")
 - `{mode}` — "YOLO" if `--yolo` flag, otherwise "STANDARD"
-- `{app_spec_content}` — Full content of `.autoforge/prompts/app_spec.txt` (read once by orchestrator)
 - `{feature_id}` — The feature ID
 - `{feature_name}` — The feature name
 - `{feature_category}` — The feature category
@@ -320,9 +388,6 @@ PROJECT DIRECTORY: {project_dir}
 AGENT ID: {worker_id}
 MODE: {mode}
 
-== APP SPECIFICATION ==
-{app_spec_content}
-
 == YOUR FEATURE ==
 Feature #{feature_id}: {feature_name}
 Category: {feature_category}
@@ -335,66 +400,13 @@ Verification Steps:
 Dependencies (already passing):
 {dependency_names}
 
-== PARALLEL SAFETY RULES ==
-IMPORTANT: Other agents are working on other features concurrently.
-- Work ONLY on feature #{feature_id}. Do NOT modify code unrelated to this feature.
-- If you encounter unexpected file changes or merge conflicts, re-read the file before editing.
-- Commit immediately after verification passes.
-- Do NOT call feature_get_ready, feature_clear_all_in_progress, or any
-  tool that affects other features' status.
-- Do NOT call feature_create, feature_create_bulk, or any creation tools.
+== INSTRUCTIONS ==
+Read these files FIRST before doing anything else:
+1. .autoforge/worker_brief.md — your full implementation protocol and safety rules
+2. .autoforge/prompts/app_spec.txt — the complete app specification
 
-== GIT COMMIT RULES ==
-- ALWAYS use simple -m flag for commit messages
-- NEVER use heredocs (cat <<EOF) — they fail in sandbox mode
-- For multi-line messages, use multiple -m flags
-
-== IMPLEMENTATION PROTOCOL ==
-
-1. Orient: Read project structure and recent git log (last 10 commits).
-   ```bash
-   ls -la {project_dir}
-   git log --oneline -10
-   ```
-
-2. Implement feature #{feature_id} following the description and verification steps.
-   Build whatever is needed — missing pages, endpoints, components are YOUR job.
-
-3. Run lint/typecheck:
-   Check for package.json (npm run lint, npx tsc --noEmit) or
-   pyproject.toml (ruff check ., mypy .) and run the appropriate commands.
-   Fix any errors before proceeding.
-
-4. Start/verify dev server if needed (check if it's already running first).
-
-{IF mode == "STANDARD":}
-5. Verify with browser testing:
-   - Open browser to dev server URL using playwright-cli
-   - Execute each verification step from the feature
-   - Check for console errors with playwright-cli console
-   - Run mock data detection grep:
-     grep -rn "globalThis\|devStore\|dev-store\|mockDb\|mockData\|fakeData\|sampleData\|dummyData\|testData\|STUB\|MOCK\|isDevelopment\|isDev" src/ --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" --include="*.vue" --include="*.svelte" | grep -v "node_modules" | grep -v "__tests__" | grep -v ".test." | grep -v ".spec." || echo "No mock patterns found"
-   - For CRUD/data features: run server restart persistence test
-     (create test data, stop server, restart, verify data persists)
-   - Close browser with playwright-cli close when done
-
-{IF mode == "YOLO":}
-5. YOLO mode — skip browser testing. Lint/typecheck passing is sufficient.
-
-6. If verification PASSES:
-   - Call feature_mark_passing with feature_id={feature_id}
-   - Git commit:
-     git add -A
-     git commit -m "feat: implement {feature_name}" -m "Feature #{feature_id} verified and passing"
-   - Output your final message starting with: RESULT: PASS
-
-7. If verification FAILS after up to 3 fix attempts:
-   - Call feature_mark_failing with feature_id={feature_id} and reason="{specific failure description}"
-   - Output your final message starting with: RESULT: FAIL: {what failed}
-
-== IMPORTANT ==
+Follow the implementation protocol in worker_brief.md exactly.
 Your FINAL message MUST start with "RESULT: PASS" or "RESULT: FAIL: {reason}".
-This is how the orchestrator knows your outcome. Do not forget this line.
 ```
 
 ---

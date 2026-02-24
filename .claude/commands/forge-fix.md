@@ -100,7 +100,18 @@ What would you like to do?
 1. Do nothing. Move to the next feature.
 2. Say: "Skipping #8 — no changes made."
 
-### Step 5: Summary
+### Step 5: Git Commit
+
+After all features have been addressed, if ANY changes were made (revised, deleted, or retried features — not skipped-only), commit:
+
+```bash
+git add -A
+git commit -m "fix: resolve failing features via /forge-fix" -m "Revised: {list or 'none'}, Deleted: {list or 'none'}, Retried: {list or 'none'}"
+```
+
+Skip this step if every feature was skipped (no changes to commit).
+
+### Step 6: Summary
 
 After all features have been addressed, show a summary:
 
