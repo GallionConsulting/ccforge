@@ -1,0 +1,4 @@
+# AutoForge — Python dependencies for the MCP feature server
+mcp>=1.0.0
+sqlalchemy>=2.0.0
+pydantic>=2.0.0

@@ -2,20 +2,21 @@
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
 *.egg-info/
 dist/
 build/
 *.egg
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
 
 # Virtual environments
 venv/
 .venv/
 
 # AutoForge runtime
-.autoforge/features.db
-.autoforge/features.db-wal
-.autoforge/features.db-shm
-.autoforge/.agent.lock
+.autoforge/
 
 # Playwright CLI artifacts
 .playwright-cli/
@@ -29,6 +30,11 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Planning docs (optional — remove this line to include in repo)
+# Planning docs
 .planning/
+
+# Setup/utility scripts
+ccdsp.bat
+git-setup.bat

@@ -1,0 +1,5 @@
+# Minimal dependencies for the MCP feature server
+# These are the only packages needed to run feature_mcp.py standalone
+mcp>=1.0.0
+sqlalchemy>=2.0.0
+pydantic>=2.0.0
