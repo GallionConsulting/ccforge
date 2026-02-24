@@ -18,7 +18,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-CCFORGE_VERSION = "1.0.0"
+CCFORGE_VERSION = "1.0.1"
 
 FORGE_HOME = Path.home() / ".forge"
 CLAUDE_COMMANDS = Path.home() / ".claude" / "commands"

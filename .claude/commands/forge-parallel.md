@@ -299,35 +299,40 @@ Display testing results separately from coding results in Step 6:
 "Testing agent: tested {N} features ({passed} pass, {fixed} fixed, {broken} broken)"
 ```
 
-### Step 5: Poll for Worker Completion
+### Step 5: Wait for Worker Completion
 
 ```
 SET active_workers = [list of {task_id, feature_id, feature_name, worker_id}]
 
-POLL LOOP:
-    For each active worker:
-        Call TaskOutput with task_id={id}, block=false, timeout=5000
+Display: "Waiting for {N} workers to complete... (blocking waits for efficiency)"
 
-        If worker completed:
-            Parse the worker's final message for "RESULT: PASS" or "RESULT: FAIL"
+WAIT LOOP:
+    Pick the first active worker in the list.
+    Call TaskOutput with task_id={id}, block=true, timeout=60000
 
-            If PASS:
-                total_completed += 1
-                Display: "Worker {worker_id}: PASS — {feature_name}"
-                (Worker already called feature_mark_passing and committed)
+    If worker completed:
+        Parse the worker's final message for "RESULT: PASS" or "RESULT: FAIL"
 
-            If FAIL:
-                total_failed += 1
-                Display: "Worker {worker_id}: FAIL — {feature_name}: {reason}"
-                (Worker already called feature_mark_failing)
+        If PASS:
+            total_completed += 1
+            Display: "Worker {worker_id}: PASS — {feature_name}"
+            (Worker already called feature_mark_passing and committed)
 
-            Remove from active_workers list
+        If FAIL:
+            total_failed += 1
+            Display: "Worker {worker_id}: FAIL — {feature_name}: {reason}"
+            (Worker already called feature_mark_failing)
 
-    If all workers completed → break poll loop
-    If workers still running → continue polling
+        Remove from active_workers list
+
+    If timeout (worker still running):
+        Move this worker to the end of the list (check the next one)
+
+    If all workers completed → break wait loop
+    If workers still active → continue to next worker
 ```
 
-**Polling strategy:** Check each worker with `block=false`. If none completed, wait a bit and try again. The TaskOutput tool with `block=false` returns immediately with current status.
+**Wait strategy:** Use `block=true` with `timeout=60000` (1 min) on each worker. This waits efficiently without consuming context window on "still running" poll messages. Workers are checked round-robin — if one times out, move on to the next. After cycling through all workers 15 times with no completions, log stuck workers and exit.
 
 ### Step 6: Report Batch Results
 

@@ -1,6 +1,6 @@
 # CCForge
 
-**Version:** 1.0.0
+**Version:** 1.0.1
 
 **Autonomous feature-by-feature application development for Claude Code**
 
