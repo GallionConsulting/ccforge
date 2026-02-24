@@ -6,6 +6,7 @@ Usage:
     python install_forge.py --check                # Verify installation health
     python install_forge.py --uninstall            # Remove ~/.forge/ and commands from ~/.claude/commands/
     python install_forge.py --update-project PATH  # Update an existing project to latest version
+    python install_forge.py --update-project PATH --force  # Force update even if version matches
 """
 
 import argparse
@@ -337,7 +338,7 @@ def check() -> None:
 # ── Update existing project ────────────────────────────────────────────────────
 
 
-def update_project(project_path: str) -> None:
+def update_project(project_path: str, force: bool = False) -> None:
     project = Path(project_path).resolve()
 
     # 1. Verify global install exists
@@ -366,10 +367,13 @@ def update_project(project_path: str) -> None:
             pass
 
     if current_version:
-        if current_version == CCFORGE_VERSION:
-            print(f"Already up to date (v{CCFORGE_VERSION}).")
+        if current_version == CCFORGE_VERSION and not force:
+            print(f"Already up to date (v{CCFORGE_VERSION}). Use --force to update anyway.")
             return
-        print(f"Updating: v{current_version} → v{CCFORGE_VERSION}\n")
+        if current_version == CCFORGE_VERSION:
+            print(f"Forcing update of v{CCFORGE_VERSION}...\n")
+        else:
+            print(f"Updating: v{current_version} → v{CCFORGE_VERSION}\n")
     else:
         print(f"No version found (pre-versioning project), updating to v{CCFORGE_VERSION}...\n")
 
@@ -400,24 +404,44 @@ def update_project(project_path: str) -> None:
             shutil.copy2(src, commands_dst / cmd)
     updated.append(f".claude/commands/ ({len(PROJECT_LOCAL_COMMANDS)} files)")
 
-    # .claude/agents/
+    # .claude/agents/ — copy all .md files from ~/.forge/agents/
     agents_dst = project / ".claude" / "agents"
     agents_dst.mkdir(parents=True, exist_ok=True)
     agents_src = FORGE_HOME / "agents"
-    for agent_file in ["coder.md", "code-review.md", "deep-dive.md"]:
-        src = agents_src / agent_file
-        if src.exists():
-            shutil.copy2(src, agents_dst / agent_file)
-    updated.append(".claude/agents/ (3 files)")
+    agent_count = 0
+    if agents_src.is_dir():
+        for agent_file in sorted(agents_src.iterdir()):
+            if agent_file.is_file() and agent_file.suffix == ".md":
+                shutil.copy2(agent_file, agents_dst / agent_file.name)
+                agent_count += 1
+    updated.append(f".claude/agents/ ({agent_count} files)")
 
-    # .claude/skills/playwright-cli/
-    skills_dst = project / ".claude" / "skills" / "playwright-cli"
-    if skills_dst.exists():
-        shutil.rmtree(skills_dst)
-    skills_src = FORGE_HOME / "skills" / "playwright-cli"
-    if skills_src.exists():
-        shutil.copytree(skills_src, skills_dst)
-        updated.append(".claude/skills/playwright-cli/")
+    # .claude/skills/ — copy all skill directories from ~/.forge/skills/
+    skills_src = FORGE_HOME / "skills"
+    if skills_src.is_dir():
+        skill_names = []
+        for skill_dir in sorted(skills_src.iterdir()):
+            if skill_dir.is_dir():
+                skill_dst = project / ".claude" / "skills" / skill_dir.name
+                if skill_dst.exists():
+                    shutil.rmtree(skill_dst)
+                shutil.copytree(skill_dir, skill_dst)
+                skill_names.append(skill_dir.name)
+        if skill_names:
+            updated.append(f".claude/skills/ ({', '.join(skill_names)})")
+
+    # .autoforge/prompts/ — update generic prompts (not app_spec or initializer)
+    prompts_dst = project / ".autoforge" / "prompts"
+    prompts_dst.mkdir(parents=True, exist_ok=True)
+    templates_src = FORGE_HOME / "templates"
+    for prompt_name, template_name in [
+        ("coding_prompt.md", "coding_prompt.template.md"),
+        ("testing_prompt.md", "testing_prompt.template.md"),
+    ]:
+        src = templates_src / template_name
+        if src.exists():
+            shutil.copy2(src, prompts_dst / prompt_name)
+    updated.append(".autoforge/prompts/ (coding_prompt.md, testing_prompt.md)")
 
     # 5. Write/update .autoforge/version.json
     (project / ".autoforge").mkdir(parents=True, exist_ok=True)
@@ -435,7 +459,8 @@ def update_project(project_path: str) -> None:
     for item in updated:
         print(f"  - {item}")
     print(f"\nProject updated to v{CCFORGE_VERSION}.")
-    print("\nNot touched: .autoforge/features.db, .autoforge/prompts/, CLAUDE.md, .mcp.json")
+    print("\nNot touched: .autoforge/features.db, .autoforge/prompts/app_spec.txt, "
+          ".autoforge/prompts/initializer_prompt.md, CLAUDE.md, .mcp.json")
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -446,6 +471,7 @@ def main() -> None:
     parser.add_argument("--uninstall", action="store_true", help="Remove installation")
     parser.add_argument("--check", action="store_true", help="Verify installation health")
     parser.add_argument("--update-project", metavar="PATH", help="Update an existing CCForge project to the latest version")
+    parser.add_argument("--force", action="store_true", help="Force update even if version matches")
     args = parser.parse_args()
 
     check_python_version()
@@ -455,7 +481,7 @@ def main() -> None:
     elif args.check:
         check()
     elif args.update_project:
-        update_project(args.update_project)
+        update_project(args.update_project, force=args.force)
     else:
         install()
 
