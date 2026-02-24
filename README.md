@@ -1,6 +1,6 @@
 # CCForge
 
-**Version:** 1.0.1
+**Version:** 1.0.2
 
 **Autonomous feature-by-feature application development for Claude Code**
 
@@ -126,7 +126,10 @@ Interactive wizard that builds a complete project specification through conversa
 - `{project}/mcp_server/`, `api/` -- Server and database code
 - `{project}/.claude/commands/` -- Project-local forge commands
 - `{project}/.claude/agents/` -- Project-local agent definitions
-- `{project}/.claude/` -- Skills, templates, and project CLAUDE.md
+- `{project}/.claude/skills/` -- playwright-cli (browser testing) and frontend-design (UI quality)
+- `{project}/.claude/templates/`, `CLAUDE.md` -- Templates and project instructions
+
+> **Tip:** During the spec wizard, you can mention "use the frontend-design skill" in your description to have the build agents invoke it when implementing UI components. This activates a design-focused skill that guides Claude toward distinctive, production-grade interfaces rather than generic defaults. It's optional -- if you don't mention it, features are built with standard code quality practices.
 
 > **Note:** After `/forge-create` completes, **restart Claude Code** before running `/forge-init`. The project-local commands (like `/forge-init`, `/forge-build`, etc.) are copied into the project directory during creation and won't be detected until Claude Code is restarted.
 
