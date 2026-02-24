@@ -18,7 +18,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-CCFORGE_VERSION = "1.0.2"
+CCFORGE_VERSION = "1.0.3"
 
 FORGE_HOME = Path.home() / ".forge"
 CLAUDE_COMMANDS = Path.home() / ".claude" / "commands"
@@ -127,8 +127,6 @@ def adapt_forge_create() -> str:
 
     replacements = [
         # Template references
-        (".claude/templates/initializer_prompt.template.md",
-         f"{home}/templates/initializer_prompt.template.md"),
         (".claude/templates/coding_prompt.template.md",
          f"{home}/templates/coding_prompt.template.md"),
         (".claude/templates/testing_prompt.template.md",
@@ -460,7 +458,7 @@ def update_project(project_path: str, force: bool = False) -> None:
         print(f"  - {item}")
     print(f"\nProject updated to v{CCFORGE_VERSION}.")
     print("\nNot touched: .autoforge/features.db, .autoforge/prompts/app_spec.txt, "
-          ".autoforge/prompts/initializer_prompt.md, CLAUDE.md, .mcp.json")
+          "CLAUDE.md, .mcp.json")
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

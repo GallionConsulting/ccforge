@@ -96,6 +96,7 @@ This replaces the following files from `~/.forge/` into the project:
 - `.claude/commands/` — the 11 project-local command files
 - `.claude/agents/` — coder.md, code-review.md, deep-dive.md
 - `.claude/skills/playwright-cli/` — full directory replacement
+- `.claude/skills/frontend-design/` — full directory replacement
 
 **Not touched:** `.autoforge/features.db`, `.autoforge/prompts/`, `CLAUDE.md`, `.mcp.json`. Your feature database, specs, prompts, and project-specific config are preserved.
 

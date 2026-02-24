@@ -8,7 +8,7 @@ This command **requires** the project directory as an argument via `$ARGUMENTS`.
 
 **Example:** `/forge-create my-app`
 
-**Output location:** `$ARGUMENTS/.autoforge/prompts/app_spec.txt` and `$ARGUMENTS/.autoforge/prompts/initializer_prompt.md`
+**Output location:** `$ARGUMENTS/.autoforge/prompts/app_spec.txt`
 
 If `$ARGUMENTS` is empty, inform the user they must provide a project path and exit.
 
@@ -487,28 +487,7 @@ Create a new file using this XML structure:
 </project_specification>
 ```
 
-## 2. Update `initializer_prompt.md`
-
-**Output path:** `$ARGUMENTS/.autoforge/prompts/initializer_prompt.md`
-
-If the output directory has an existing `initializer_prompt.md`, read it and update the feature count.
-If not, copy from `.claude/templates/initializer_prompt.template.md` first, then update.
-
-**CRITICAL: You MUST update the feature count placeholder:**
-
-1. Find the line containing `**[FEATURE_COUNT]**` in the "REQUIRED FEATURE COUNT" section
-2. Replace `[FEATURE_COUNT]` with the exact number agreed upon in Phase 4L (e.g., `25`)
-3. The result should read like: `You must create exactly **25** features using the...`
-
-**Example edit:**
-```
-Before: **CRITICAL:** You must create exactly **[FEATURE_COUNT]** features using the `feature_create_bulk` tool.
-After:  **CRITICAL:** You must create exactly **25** features using the `feature_create_bulk` tool.
-```
-
-**Verify the update:** After editing, read the file again to confirm the feature count appears correctly. If `[FEATURE_COUNT]` still appears in the file, the update failed and you must try again.
-
-## 3. Copy Prompt Templates
+## 2. Copy Prompt Templates
 
 Copy the following templates from this project into the target project:
 
@@ -517,7 +496,7 @@ Copy the following templates from this project into the target project:
 
 These prompts will be used by subsequent `/forge-build` and `/forge-test` sessions.
 
-## 4. Generate `.mcp.json` (MCP Server Config)
+## 3. Generate `.mcp.json` (MCP Server Config)
 
 **Output path:** `$ARGUMENTS/.mcp.json`
 
@@ -538,7 +517,7 @@ Claude Code uses `.mcp.json` in the project root for per-project MCP server conf
 
 Claude Code will auto-discover this file and prompt the user to approve the MCP server on first use.
 
-## 5. Copy MCP Server Files
+## 4. Copy MCP Server Files
 
 Copy the MCP server and its dependencies into the target project so it's self-contained:
 
@@ -553,7 +532,7 @@ cd $ARGUMENTS && pip install -r mcp_server/requirements.txt
 
 Or if the target project uses a virtual environment, install into that.
 
-## 6. Generate Project CLAUDE.md
+## 5. Generate Project CLAUDE.md
 
 **Output path:** `$ARGUMENTS/CLAUDE.md`
 
@@ -564,13 +543,7 @@ Generate from the template at `.claude/templates/project-claude.template.md`, fi
 - `[TECH_STACK_SUMMARY]` — brief tech stack (e.g., "React + Node.js + SQLite")
 - `[FEATURE_COUNT]` — the feature count from Phase 4L
 
-## 7. Copy Playwright CLI Skill
-
-Copy the playwright-cli skill to the target project for browser automation testing:
-
-```bash
-cp -r .claude/skills/playwright-cli $ARGUMENTS/.claude/skills/playwright-cli
-```
+## 6. Copy Skills
 
 Create the target directory structure first if it doesn't exist:
 
@@ -578,7 +551,19 @@ Create the target directory structure first if it doesn't exist:
 mkdir -p $ARGUMENTS/.claude/skills
 ```
 
-## 8. Copy Project Commands
+Copy the playwright-cli skill to the target project for browser automation testing:
+
+```bash
+cp -r .claude/skills/playwright-cli $ARGUMENTS/.claude/skills/playwright-cli
+```
+
+Copy the frontend-design skill for production-grade UI development:
+
+```bash
+cp -r .claude/skills/frontend-design $ARGUMENTS/.claude/skills/frontend-design
+```
+
+## 7. Copy Project Commands
 
 Copy the forge slash commands into the target project so they're available project-locally:
 
@@ -589,7 +574,7 @@ for cmd in forge-init.md forge-build.md forge-parallel.md forge-status.md forge-
 done
 ```
 
-## 9. Copy Project Agents
+## 8. Copy Project Agents
 
 Copy the agent definitions into the target project:
 
@@ -600,7 +585,7 @@ for agent in coder.md code-review.md deep-dive.md; do
 done
 ```
 
-## 10. Create .autoforge Directory Structure
+## 9. Create .autoforge Directory Structure
 
 Ensure the `.autoforge` directory structure exists:
 
@@ -615,7 +600,7 @@ features.db
 .agent.lock
 ```
 
-## 11. Write Version Metadata
+## 10. Write Version Metadata
 
 Write `$ARGUMENTS/.autoforge/version.json` with the following content:
 
@@ -639,7 +624,6 @@ Once files are generated, tell the user what to do next:
 >
 > **Files created:**
 > - `$ARGUMENTS/.autoforge/prompts/app_spec.txt` — Project specification
-> - `$ARGUMENTS/.autoforge/prompts/initializer_prompt.md` — Initializer agent prompt
 > - `$ARGUMENTS/.autoforge/prompts/coding_prompt.md` — Coding agent prompt
 > - `$ARGUMENTS/.autoforge/prompts/testing_prompt.md` — Testing agent prompt
 > - `$ARGUMENTS/.mcp.json` — MCP server configuration
@@ -647,6 +631,7 @@ Once files are generated, tell the user what to do next:
 > - `$ARGUMENTS/.claude/commands/` — Project-local forge commands
 > - `$ARGUMENTS/.claude/agents/` — Project-local agent definitions
 > - `$ARGUMENTS/.claude/skills/playwright-cli/` — Browser automation skill
+> - `$ARGUMENTS/.claude/skills/frontend-design/` — Production-grade UI design skill
 > - `$ARGUMENTS/mcp_server/` — Feature tracking MCP server
 > - `$ARGUMENTS/api/` — Database models and dependency resolver
 >

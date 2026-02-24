@@ -47,7 +47,6 @@ This project uses a feature MCP server to track development progress. Features a
 .autoforge/
   prompts/
     app_spec.txt           # Project specification (XML)
-    initializer_prompt.md  # Initializer agent prompt
     coding_prompt.md       # Coding agent prompt
     testing_prompt.md      # Testing agent prompt
   features.db              # Feature database (SQLite)

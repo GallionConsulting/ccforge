@@ -1,6 +1,6 @@
 # CCForge
 
-**Version:** 1.0.2
+**Version:** 1.0.3
 
 **Autonomous feature-by-feature application development for Claude Code**
 
@@ -431,7 +431,6 @@ ccforge/
     │   └── frontend-design/           # Production-grade UI design
     └── templates/
         ├── app_spec.template.txt      # XML project spec template
-        ├── initializer_prompt.template.md
         ├── coding_prompt.template.md
         ├── testing_prompt.template.md
         └── project-claude.template.md
